@@ -823,7 +823,7 @@ class DbusHelper:
 
         # cell voltages
         if utils.BATTERY_CELL_DATA_FORMAT > 0:
-            for i in range(1, len(self.battery.cells) + 1):
+            for i in range(1, self.battery.cell_count + 1):
                 cellpath = "/Cell/%s/Volts" if (utils.BATTERY_CELL_DATA_FORMAT & 2) else "/Voltages/Cell%s"
                 self._dbusservice.add_path(
                     cellpath % (str(i)),
@@ -1301,8 +1301,8 @@ class DbusHelper:
             try:
                 cell_voltage_max = utils.MAX_CELL_VOLTAGE * 2
                 voltage_sum = 0
-                for i in range(len(self.battery.cells)):
-                    voltage = self.battery.cells[i].voltage
+                for i in range(self.battery.cell_count):
+                    voltage = self.battery.get_cell_voltage(i)
                     if voltage is not None and voltage > cell_voltage_max:
                         logger.warning(f"Implausible cell {i + 1} voltage {voltage} V detected (max {cell_voltage_max} V), skipping")
                         voltage = None
