@@ -121,6 +121,7 @@ if [ -z "$1" ]; then
         "beta build \"$latest_release_mrmanuel_beta\" (no errors after 72 h runtime, long time testing needed)"
         "nightly build \"$latest_release_mrmanuel_nightly\" (newest features and fixes, bugs possible)"
         "specific branch (specific feature testing)"
+        "specific commit (specific state of code)"
         "specific version"
         "local tar file"
         "quit"
@@ -139,6 +140,9 @@ if [ -z "$1" ]; then
                 break
                 ;;
             "specific branch (specific feature testing)")
+                break
+                ;;
+            "specific commit (specific state of code)")
                 break
                 ;;
             "specific version")
@@ -167,6 +171,8 @@ if [ -z "$1" ]; then
         version="nightly"
     elif [ "$version" = "specific branch (specific feature testing)" ]; then
         version="specific_branch"
+    elif [ "$version" = "specific commit (specific state of code)" ]; then
+        version="specific_commit"
     elif [ "$version" = "specific version" ]; then
         version="specific_version"
     elif [ "$version" = "local tar file" ]; then
@@ -182,6 +188,9 @@ elif [ "$1" = "--beta" ]; then
 elif [ "$1" = "--nightly" ]; then
     version="nightly"
 
+elif [ "$1" = "--commit" ]; then
+    version="specific_commit"
+
 elif [ "$1" = "--local" ]; then
     version="local"
 
@@ -191,6 +200,7 @@ else
     echo "  --latest   Install the latest stable release from mr-manuel's repo"
     echo "  --beta     Install the latest beta release from mr-manuel's repo"
     echo "  --nightly  Install the latest nightly build from mr-manuel's repo"
+    echo "  --commit   Install a specific commit hash from mr-manuel's repo"
     echo "  --local    Install a local tar file from \"/tmp/venus-data.tar.gz\""
     echo
     exit 1
@@ -318,10 +328,10 @@ fi
 
 
 
-## nightly builds
-if [ "$version" = "nightly" ] || [ "$version" = "specific_branch" ]; then
+## nightly builds, branches and specific commits
+if [ "$version" = "nightly" ] || [ "$version" = "specific_branch" ] || [ "$version" = "specific_commit" ]; then
 
-    # ask which branch to install
+    # ask which branch/commit to install
     if [ "$version" = "specific_branch" ]; then
 
         # fetch branches from Github
@@ -341,17 +351,27 @@ if [ "$version" = "nightly" ] || [ "$version" = "specific_branch" ]; then
         done
 
         echo "> Selected branch: $branch"
+        download_url="https://github.com/mr-manuel/venus-os_dbus-serialbattery/archive/refs/heads/$branch.zip"
+
+    elif [ "$version" = "specific_commit" ]; then
+        
+        echo
+        read -r -p "Enter the commit hash (e.g. f43f76ce508578e413fe5325dd37f841f5c297bd): " branch
+        echo "> Selected commit: $branch"
+        download_url="https://github.com/mr-manuel/venus-os_dbus-serialbattery/archive/$branch.zip"
 
     else
 
         branch="master"
+        download_url="https://github.com/mr-manuel/venus-os_dbus-serialbattery/archive/refs/heads/$branch.zip"
 
     fi
 
     # download driver
-    echo "Downloading branch \"$branch\" from mr-manuel's repo..."
+    echo "Downloading \"$branch\" from mr-manuel's repo..."
     echo ""
-    wget -O /tmp/$branch.zip https://github.com/mr-manuel/venus-os_dbus-serialbattery/archive/refs/heads/$branch.zip
+    wget -O /tmp/$branch.zip "$download_url"
+    
     # check if the download was successful
     if [ $? -ne 0 ]; then
         echo "ERROR: Error during downloading the ZIP file. Please try again."
