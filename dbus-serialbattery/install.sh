@@ -122,6 +122,7 @@ if [ -z "$1" ]; then
         "nightly build \"$latest_release_mrmanuel_nightly\" (newest features and fixes, bugs possible)"
         "specific branch (specific feature testing)"
         "specific commit (specific state of code)"
+        "specific ZIP URL (e.g. for forks)"
         "specific version"
         "local tar file"
         "quit"
@@ -143,6 +144,9 @@ if [ -z "$1" ]; then
                 break
                 ;;
             "specific commit (specific state of code)")
+                break
+                ;;
+            "specific ZIP URL (e.g. for forks)")
                 break
                 ;;
             "specific version")
@@ -173,6 +177,8 @@ if [ -z "$1" ]; then
         version="specific_branch"
     elif [ "$version" = "specific commit (specific state of code)" ]; then
         version="specific_commit"
+    elif [ "$version" = "specific ZIP URL (e.g. for forks)" ]; then
+        version="specific_zip_url"
     elif [ "$version" = "specific version" ]; then
         version="specific_version"
     elif [ "$version" = "local tar file" ]; then
@@ -191,6 +197,9 @@ elif [ "$1" = "--nightly" ]; then
 elif [ "$1" = "--commit" ]; then
     version="specific_commit"
 
+elif [ "$1" = "--zip-url" ]; then
+    version="specific_zip_url"
+
 elif [ "$1" = "--local" ]; then
     version="local"
 
@@ -201,6 +210,7 @@ else
     echo "  --beta     Install the latest beta release from mr-manuel's repo"
     echo "  --nightly  Install the latest nightly build from mr-manuel's repo"
     echo "  --commit   Install a specific commit hash from mr-manuel's repo"
+    echo "  --zip-url  Install a custom ZIP URL (e.g. from a fork)"
     echo "  --local    Install a local tar file from \"/tmp/venus-data.tar.gz\""
     echo
     exit 1
@@ -328,7 +338,7 @@ fi
 
 
 
-## nightly builds, branches and specific commits
+## nightly builds and branches and specific commits
 if [ "$version" = "nightly" ] || [ "$version" = "specific_branch" ] || [ "$version" = "specific_commit" ]; then
 
     # ask which branch/commit to install
@@ -428,6 +438,87 @@ if [ "$version" = "nightly" ] || [ "$version" = "specific_branch" ] || [ "$versi
     # cleanup
     rm /tmp/$branch.zip
     rm -rf /tmp/venus-os_dbus-serialbattery-$branch
+
+fi
+
+
+
+## custom ZIP URL (e.g. for forks)
+if [ "$version" = "specific_zip_url" ]; then
+
+    echo
+    read -r -p "Enter the full ZIP URL (e.g. https://github.com/username/repo/archive/refs/heads/main.zip): " zip_url
+    echo ""
+    echo "Downloading custom ZIP from $zip_url..."
+    echo ""
+    wget -O /tmp/custom_fork.zip "$zip_url"
+    
+    # check if the download was successful
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Error during downloading the ZIP file. Please check the URL."
+        # restore config.ini
+        restore_config
+        exit 1
+    fi
+    echo ""
+
+    # dynamically detect the top-level directory inside the ZIP file
+    zip_root=$(unzip -l /tmp/custom_fork.zip | awk '{print $4}' | grep '/' | head -n 1 | cut -d'/' -f1)
+
+    if [ -z "$zip_root" ]; then
+        echo "ERROR: Could not determine the root directory inside the ZIP file."
+        # restore config.ini
+        restore_config
+        exit 1
+    fi
+
+    # check driver version path style and extract archive
+    # driver >= v2.0.0
+    if unzip -l /tmp/custom_fork.zip | awk '{print $4}' | grep -q "^${zip_root}/dbus-serialbattery/"; then
+        unzip -q /tmp/custom_fork.zip "${zip_root}/dbus-serialbattery/*" -d /tmp
+        is_v2=true
+    # driver < v2.0.0
+    elif unzip -l /tmp/custom_fork.zip | awk '{print $4}' | grep -q "^${zip_root}/etc/dbus-serialbattery/"; then
+        unzip -q /tmp/custom_fork.zip "${zip_root}/etc/dbus-serialbattery/*" -d /tmp
+        is_v2=false
+    else
+        echo "ERROR: ZIP file does not contain expected data structure (dbus-serialbattery). Check the file and try again."
+        # restore config.ini
+        restore_config
+        exit 1
+    fi
+
+    # check if the extraction was successful
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Error during extracting the ZIP file. Check the file and try again."
+        # restore config.ini
+        restore_config
+        exit 1
+    fi
+
+    # remove old driver
+    # driver >= v2.0.0
+    if [ -d "/data/apps/dbus-serialbattery" ]; then
+        rm -rf /data/apps/dbus-serialbattery
+    fi
+    # driver < v2.0.0
+    if [ -d "/data/etc/dbus-serialbattery" ]; then
+        rm -rf /data/etc/dbus-serialbattery
+    fi
+
+    # move driver to the correct location
+    if [ "$is_v2" = true ] && [ -d "/tmp/${zip_root}/dbus-serialbattery" ]; then
+        mv "/tmp/${zip_root}/dbus-serialbattery" /data/apps
+    elif [ "$is_v2" = false ] && [ -d "/tmp/${zip_root}/etc/dbus-serialbattery" ]; then
+        mv "/tmp/${zip_root}/etc/dbus-serialbattery" /data/etc
+    else
+        echo "ERROR: Something went wrong during moving the files from the temporary ZIP location to the final location. Please try again."
+        exit 1
+    fi
+
+    # cleanup
+    rm /tmp/custom_fork.zip
+    rm -rf "/tmp/${zip_root}"
 
 fi
 
